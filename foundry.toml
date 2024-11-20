@@ -1,0 +1,41 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+ffi = false
+verbosity = 5
+solc_version = "0.8.28"
+optimizer = false
+optimizer_runs = 200
+
+allow_paths = ["../node_modules"]
+
+gas_reports = ["*"]
+gas_reports_ignore = []
+
+sender = '0x090f02fac47A0A4e0f38B0118e58B34d45b30625'
+# tx_origin = '0x090f02fac47A0A4e0f38B0118e58B34d45b30625'
+
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "@chainlink/=lib/chainlink-brownie-contracts",
+]
+
+etherscan_api_key = "${ETHERSCAN_API_KEY}"
+
+[rpc_endpoints]
+holesky = "${HOLESKY_RPC_URL}"
+lisk-sepolia = "${LISK_SEPOLIA_RPC_URL}"
+localhost = "http://localhost:8545"
+
+# Custom chain for lisk-sepolia
+[etherscan]
+lisk-sepolia = { chain = 4202, url = "https://sepolia-blockscout.lisk.com/api", key = "" }
+
+[fmt]
+line_length = 120
+tab_width = 4
+bracket_spacing = true
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
