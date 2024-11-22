@@ -2,18 +2,20 @@
 pragma solidity 0.8.28;
 
 import { LibDiamond } from "../libraries/LibDiamond.sol";
+import { IStaffManagement } from "../interfaces/IStaffManagement.sol";
 
-contract StaffManagementFacet {
+contract StaffManagementFacet is IStaffManagement {
     // Custom errors
     error StaffIdMustBePositiveInteger();
     error StaffIdExist();
     error StaffAlreadyExist();
-    error StaffNotFound(uint256 staffID);
+    error StaffNotFound();
     error InvalidRoleAssignment(uint256 staffID, LibDiamond.Role currentRole);
     error TooManyAdmins();
     error InvalidStaffID(uint256 staffID);
     error StaffIdAlreadyUsed();
     error CannotUpdateOwnStatus();
+    error CannotUpdateOwnerStatus();
 
     event StaffAdded(uint256 indexed staffID, address indexed staffAddr, string name, LibDiamond.Role role);
     event StaffRemoved(uint256 indexed staffID, address indexed staffAddr);
@@ -30,6 +32,16 @@ contract StaffManagementFacet {
         _;
     }
 
+    modifier onlyAdminAndSalesRep() {
+        LibDiamond.Staff memory caller = LibDiamond.getStaffState().staffDetails[msg.sender];
+        require(
+            caller.role == LibDiamond.Role.SalesRep || caller.role == LibDiamond.Role.Administrator,
+            LibDiamond.NotSalesRepOrAdministrator()
+        );
+        require(caller.status == LibDiamond.Status.Active, LibDiamond.NotActiveStaff());
+        _;
+    }
+
     modifier onlyContractOwner() {
         LibDiamond.enforceIsContractOwner();
         _;
@@ -38,7 +50,6 @@ contract StaffManagementFacet {
     // Function to update the max admin limit (only accessible by the store owner)
     function updateAdminLimit(uint16 _newLimit) external onlyContractOwner {
         LibDiamond.StaffState storage staffState = LibDiamond.getStaffState();
-        require(msg.sender == staffState.storeOwner, LibDiamond.NotStoreOwner());
 
         staffState.maxAdmins = _newLimit;
         emit AdminLimitUpdated(_newLimit);
@@ -54,7 +65,6 @@ contract StaffManagementFacet {
         LibDiamond.Role _role
     ) external onlyContractOwner {
         LibDiamond.StaffState storage staffState = LibDiamond.getStaffState();
-        require(msg.sender == staffState.storeOwner, LibDiamond.NotStoreOwner());
 
         require(_addr != address(0), LibDiamond.NoZeroAddress());
         require(_staffID > 0, StaffIdMustBePositiveInteger());
@@ -66,7 +76,7 @@ contract StaffManagementFacet {
             name: _name,
             email: _email,
             phoneNumber: _phoneNumber,
-            status: LibDiamond.Status.Active, // Automatically set to Active (0) when added
+            status: LibDiamond.Status.Active,
             dateJoined: block.timestamp,
             role: _role
         });
@@ -84,10 +94,9 @@ contract StaffManagementFacet {
     // Function to promote or demote staff (only accessible by store owner)
     function setRole(uint256 _staffID, LibDiamond.Role _role) external onlyContractOwner {
         LibDiamond.StaffState storage staffState = LibDiamond.getStaffState();
-        require(msg.sender == staffState.storeOwner, LibDiamond.NotStoreOwner());
 
         address staffAddr = staffState.staffIDToAddress[_staffID];
-        if (staffAddr == address(0)) revert StaffNotFound(_staffID);
+        if (staffAddr == address(0)) revert StaffNotFound();
 
         LibDiamond.Staff memory staff = staffState.staffDetails[staffAddr];
 
@@ -109,54 +118,49 @@ contract StaffManagementFacet {
         LibDiamond.StaffState storage staffState = LibDiamond.getStaffState();
 
         address staffAddr = staffState.staffIDToAddress[_staffID];
-        require(staffAddr != address(0), StaffNotFound(_staffID));
+        require(staffAddr != address(0), StaffNotFound());
 
         if (staffAddr == msg.sender) revert CannotUpdateOwnStatus();
+        if (staffAddr == LibDiamond.contractOwner()) revert CannotUpdateOwnerStatus();
 
         staffState.staffDetails[staffAddr].status = _status;
 
         emit StaffStatusUpdated(_staffID, staffAddr, _status);
     }
 
-    // Function to get all active staff (returns only those with "Active" status)
-    function getAllActiveStaffs() public view returns (LibDiamond.Staff[] memory activeStaffs) {
+    // Function to get staff details by address (accessible by SalesRep or Administrator)
+    function getStaffDetailsByAddress(address _staffAddr)
+        external
+        view
+        onlyAdminAndSalesRep
+        returns (LibDiamond.Staff memory)
+    {
         LibDiamond.StaffState storage staffState = LibDiamond.getStaffState();
 
-        uint256 staffCount = staffState.staffAddressArray.length;
-        uint256 activeCount = 0;
+        if (_staffAddr == address(0)) revert StaffNotFound();
 
-        for (uint256 i = 0; i < staffCount; i++) {
-            address staffAddr = staffState.staffAddressArray[i];
-            if (staffState.staffDetails[staffAddr].status == LibDiamond.Status.Active) {
-                activeCount++;
-            }
-        }
-
-        activeStaffs = new LibDiamond.Staff[](activeCount);
-        uint256 index = 0;
-
-        for (uint256 i = 0; i < staffCount; i++) {
-            address staffAddr = staffState.staffAddressArray[i];
-            if (staffState.staffDetails[staffAddr].status == LibDiamond.Status.Active) {
-                activeStaffs[index] = staffState.staffDetails[staffAddr];
-                index++;
-            }
-        }
+        LibDiamond.Staff memory staff = staffState.staffDetails[_staffAddr];
+        return staff;
     }
 
     // Function to get staff details by staff ID (accessible by SalesRep or Administrator)
-    function getStaffDetailsByID(uint256 _staffID) public view returns (LibDiamond.Staff memory) {
+    function getStaffDetailsByID(uint256 _staffID)
+        external
+        view
+        onlyAdminAndSalesRep
+        returns (LibDiamond.Staff memory)
+    {
         LibDiamond.StaffState storage staffState = LibDiamond.getStaffState();
 
         address staffAddr = staffState.staffIDToAddress[_staffID];
-        if (staffAddr == address(0)) revert StaffNotFound(_staffID);
+        if (staffAddr == address(0)) revert StaffNotFound();
 
         LibDiamond.Staff memory staff = staffState.staffDetails[staffAddr];
         return staff;
     }
 
     // Function to get all staff details (accessible by SalesRep or Administrator)
-    function getAllStaff() public view returns (LibDiamond.Staff[] memory allStaffs) {
+    function getAllStaff() external view onlyAdminAndSalesRep returns (LibDiamond.Staff[] memory allStaffs) {
         LibDiamond.StaffState storage staffState = LibDiamond.getStaffState();
 
         address[] memory staffIDAddresses = staffState.staffAddressArray;

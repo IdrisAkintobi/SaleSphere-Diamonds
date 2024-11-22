@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
 
-import { Test } from "forge-std/Test.sol";
-import { Script } from "forge-std/Script.sol";
-import "solidity-stringutils/strings.sol";
+import { Test } from "../../lib/forge-std/src/Test.sol";
+import { Script } from "../../lib/forge-std/src/Script.sol";
+import "../../lib/solidity-stringutils/src/strings.sol";
 
 abstract contract DiamondUtils is Script {
     using strings for *;
@@ -35,7 +35,7 @@ abstract contract DiamondUtils is Script {
 
         for (uint256 i = 0; i < selectors.length; i++) {
             s.split(dbquote); // advance to next doublequote
-            // split at colon, extract string up to next doublequote for methodname
+            // split at colon, extract string up to next doublequote for method name
             strings.slice memory method = s.split(colon).until(dbquote);
             selectors[i] = bytes4(method.keccak());
             s.split(comma).until(dbquote); // advance s to the next comma

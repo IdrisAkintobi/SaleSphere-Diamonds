@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.28;
 
 /**
  * \
@@ -13,22 +13,17 @@ import { LibDiamond } from "./libraries/LibDiamond.sol";
 import { IDiamondCut } from "./interfaces/IDiamondCut.sol";
 
 contract Diamond {
-    constructor(
-        address _contractOwner,
-        address _diamondCutFacet,
-        uint16 maxAdmins,
-        uint24 maxQuantity,
-        uint16 productLowMargin
-    ) payable {
-        LibDiamond.setContractOwner(_contractOwner);
-        LibDiamond.setInitials(maxAdmins, maxQuantity, productLowMargin);
+    constructor(address storeOwner, address diamondCutFacet, uint16 maxAdmins, uint24 maxQuantity) payable {
+        if (storeOwner == address(0)) revert LibDiamond.NoZeroAddress();
+        LibDiamond.setContractOwner(msg.sender);
+        LibDiamond.setInitials(storeOwner, maxAdmins, maxQuantity);
 
         // Add the diamondCut external function from the diamondCutFacet
         IDiamondCut.FacetCut[] memory cut = new IDiamondCut.FacetCut[](1);
         bytes4[] memory functionSelectors = new bytes4[](1);
         functionSelectors[0] = IDiamondCut.diamondCut.selector;
         cut[0] = IDiamondCut.FacetCut({
-            facetAddress: _diamondCutFacet,
+            facetAddress: diamondCutFacet,
             action: IDiamondCut.FacetCutAction.Add,
             functionSelectors: functionSelectors
         });
@@ -57,10 +52,15 @@ contract Diamond {
         }
     }
 
-    //immutable function example
-    function example() public pure returns (string memory) {
-        return "THIS IS AN EXAMPLE OF AN IMMUTABLE FUNCTION";
+    receive() external payable { }
+
+    //immutable functions
+    function getStoreDetails() external view returns (string memory) {
+        return LibDiamond.diamondStorage().storeDetailsIPFSHash;
     }
 
-    receive() external payable { }
+    function updateStoreDetailsHash(string calldata newHash) external {
+        LibDiamond.enforceIsContractOwner();
+        LibDiamond.updateStoreDetails(newHash);
+    }
 }

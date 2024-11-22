@@ -1,0 +1,23 @@
+{
+    "cSpell.words": [
+        "blockscout",
+        "calldatacopy",
+        "calldatasize",
+        "chainlink",
+        "dbquote",
+        "delegatecall",
+        "extcodecopy",
+        "holesky",
+        "IERC",
+        "IPFS",
+        "keccak",
+        "LISK",
+        "Mngt",
+        "Mudge",
+        "remappings",
+        "returndatacopy",
+        "returndatasize",
+        "staticcall",
+        "stringutils"
+    ]
+}

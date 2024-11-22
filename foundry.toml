@@ -2,24 +2,19 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-ffi = false
+ffi = true
 verbosity = 5
 solc_version = "0.8.28"
-optimizer = false
+optimizer = true
 optimizer_runs = 200
-
-allow_paths = ["../node_modules"]
 
 gas_reports = ["*"]
 gas_reports_ignore = []
 
-sender = '0x090f02fac47A0A4e0f38B0118e58B34d45b30625'
-# tx_origin = '0x090f02fac47A0A4e0f38B0118e58B34d45b30625'
-
 remappings = [
     "forge-std/=lib/forge-std/src/",
     "@openzeppelin/=lib/openzeppelin-contracts/",
-    "@chainlink/=lib/chainlink-brownie-contracts",
+    "@chainlink/=lib/chainlink-brownie-contracts/",
 ]
 
 etherscan_api_key = "${ETHERSCAN_API_KEY}"

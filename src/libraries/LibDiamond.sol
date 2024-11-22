@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.28;
 
 /**
  * \
@@ -40,7 +40,6 @@ library LibDiamond {
     event OwnershipTransferRequested(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferAccepted(address indexed previousOwner, address indexed newOwner);
     event DiamondCut(IDiamondCut.FacetCut[] _diamondCut, address _init, bytes _calldata);
-
     event ProductStockIsLow(uint256 indexed productID, uint256 quantity);
 
     // Storage positions
@@ -74,8 +73,9 @@ library LibDiamond {
         mapping(bytes4 => bool) supportedInterfaces;
         // owner of the contract
         address contractOwner;
-        // proposed ownern
+        // proposed owner
         address newOwner;
+        string storeDetailsIPFSHash;
     }
 
     /**
@@ -105,37 +105,19 @@ library LibDiamond {
         string productName;
         uint256 productPrice;
         uint256 quantity;
-        address uploader;
         uint256 dateAdded;
         string barcode;
-    }
-
-    // Struct for frontend display
-    struct SaleDisplay {
-        string saleId; // Will be derived from sale index/hash
-        string productName;
-        uint256 productPrice;
-        uint256 quantity;
-        string seller;
-        ModeOfPayment modeOfPayment;
+        address uploader;
+        uint16 productLowMargin;
     }
 
     struct StoreState {
         uint256 saleCounter; // Counter to track the sale ID
         mapping(uint256 => Sale) sales; // Mapping of sale ID to Sale struct
         uint256 productCounter; // Counter to track the products ID
-        uint16 productLowMargin; // The margin to signal a low stock
         mapping(uint256 => Product) products; // Mapping of productId to products struct
         uint256[] productsIDArray;
         uint256 maximumQuantity;
-    }
-
-    // Function to retrieve store storage
-    function getStoreState() internal pure returns (StoreState storage storeState) {
-        bytes32 position = STORE_STATE_POSITION;
-        assembly {
-            storeState.slot := position
-        }
     }
 
     /**
@@ -164,9 +146,8 @@ library LibDiamond {
 
     struct StaffState {
         uint16 maxAdmins; // Max number of admins allowed (set by store owner)
-        address storeOwner; // Store owner's address
-        address proposedOwner; // Proposed new owner
         uint32 adminCount; // To track the number of administrators
+        address proposedOwner; // Proposed new owner
         mapping(address => Staff) staffDetails; // Mapping to store staff details by their address
         mapping(uint256 => address) staffIDToAddress; // Mapping to store staffID to their address
         address[] staffAddressArray; // Array of staffID
@@ -187,13 +168,23 @@ library LibDiamond {
         }
     }
 
-    function setInitials(uint16 maxAdmins, uint24 maxQuantity, uint16 productLowMargin) internal {
+    // Function to retrieve store storage
+    function getStoreState() internal pure returns (StoreState storage storeState) {
+        bytes32 position = STORE_STATE_POSITION;
+        assembly {
+            storeState.slot := position
+        }
+    }
+
+    function setInitials(address storeOwner, uint16 maxAdmins, uint24 maxQuantity) internal {
         StaffState storage staffState = getStaffState();
         staffState.maxAdmins = maxAdmins;
 
         StoreState storage state = getStoreState();
         state.maximumQuantity = maxQuantity;
-        state.productLowMargin = productLowMargin;
+
+        DiamondStorage storage ds = diamondStorage();
+        ds.newOwner = storeOwner;
     }
 
     function deleteStaffIDFromArray(address _staffAddr) internal {
@@ -222,22 +213,31 @@ library LibDiamond {
         }
     }
 
-    function setContractOwner(address _newOwner) internal {
+    function setContractOwner(address _owner) internal {
+        diamondStorage().contractOwner = _owner;
+    }
+
+    function transferOwnership(address _newOwner) internal {
         DiamondStorage storage ds = diamondStorage();
         address previousOwner = ds.contractOwner;
         ds.newOwner = _newOwner;
         emit OwnershipTransferRequested(previousOwner, _newOwner);
     }
 
-    function acceptContractOwner() internal {
+    function acceptOwnership() internal {
         DiamondStorage storage ds = diamondStorage();
         address previousOwner = ds.contractOwner;
         ds.contractOwner = msg.sender;
+        ds.newOwner = address(0);
         emit OwnershipTransferAccepted(previousOwner, msg.sender);
     }
 
     function contractOwner() internal view returns (address contractOwner_) {
         contractOwner_ = diamondStorage().contractOwner;
+    }
+
+    function updateStoreDetails(string calldata newHash) internal {
+        diamondStorage().storeDetailsIPFSHash = newHash;
     }
 
     function enforceIsContractOwner() internal view {

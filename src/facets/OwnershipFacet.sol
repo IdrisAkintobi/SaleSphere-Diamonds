@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.28;
 
 import { LibDiamond } from "../libraries/LibDiamond.sol";
 import { IERC173 } from "../interfaces/IERC173.sol";
@@ -7,12 +7,12 @@ import { IERC173 } from "../interfaces/IERC173.sol";
 contract OwnershipFacet is IERC173 {
     function transferOwnership(address _newOwner) external override {
         LibDiamond.enforceIsContractOwner();
-        LibDiamond.setContractOwner(_newOwner);
+        LibDiamond.transferOwnership(_newOwner);
     }
 
     function acceptOwnership() external {
         LibDiamond.enforceIsProposedOwner();
-        LibDiamond.acceptContractOwner();
+        LibDiamond.acceptOwnership();
     }
 
     function owner() external view override returns (address owner_) {

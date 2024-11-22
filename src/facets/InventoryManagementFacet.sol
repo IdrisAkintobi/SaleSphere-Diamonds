@@ -2,12 +2,14 @@
 pragma solidity 0.8.28;
 
 import { LibDiamond } from "../libraries/LibDiamond.sol";
+import { IInventoryManagement } from "../interfaces/IInventoryManagement.sol";
 
-contract InventoryManagementFacet {
+contract InventoryManagementFacet is IInventoryManagement {
     // Custom errors
     error ProductExist(uint256 productId);
     error EmptyProductName();
     error InvalidPrice();
+    error InvalidProductLowMargin();
     error InvalidQuantity();
     error MaximumQuantityExceeded();
 
@@ -20,22 +22,22 @@ contract InventoryManagementFacet {
         address indexed uploader,
         uint256 dateAdded
     );
-    event ProductUpdated(uint256 indexed productID, string productName, uint256 productPrice, string barcode);
+    event ProductNameUpdated(uint256 indexed productID, string productName);
+    event ProductPriceUpdated(uint256 indexed productID, uint256 productPrice);
+    event ProductLowMarginUpdated(uint256 indexed productID, uint16 productLowMargin);
     event ProductDeleted(uint256 indexed productID);
     event ProductRestocked(uint256 indexed productID, uint256 amountRestocked, uint256 currentStock);
 
     modifier onlyAdmin() {
         require(msg.sender != address(0), LibDiamond.NoZeroAddress());
-        LibDiamond.StaffState storage staffState = LibDiamond.getStaffState();
-        LibDiamond.Staff memory caller = staffState.staffDetails[msg.sender];
+        LibDiamond.Staff memory caller = LibDiamond.getStaffState().staffDetails[msg.sender];
         require(caller.role == LibDiamond.Role.Administrator, LibDiamond.NotAnAdministrator());
         require(caller.status == LibDiamond.Status.Active, LibDiamond.NotActiveStaff());
         _;
     }
 
     modifier onlyAdminAndSalesRep() {
-        LibDiamond.StaffState storage staffState = LibDiamond.getStaffState();
-        LibDiamond.Staff memory caller = staffState.staffDetails[msg.sender];
+        LibDiamond.Staff memory caller = LibDiamond.getStaffState().staffDetails[msg.sender];
         require(
             caller.role == LibDiamond.Role.SalesRep || caller.role == LibDiamond.Role.Administrator,
             LibDiamond.NotSalesRepOrAdministrator()
@@ -49,6 +51,7 @@ contract InventoryManagementFacet {
         string calldata _productName,
         uint256 _productPrice,
         uint256 _quantity,
+        uint16 _productLowMargin,
         string calldata _barcode
     ) external onlyAdmin {
         if (bytes(_productName).length == 0) revert EmptyProductName();
@@ -68,34 +71,46 @@ contract InventoryManagementFacet {
             productName: _productName,
             productPrice: _productPrice,
             quantity: _quantity,
-            uploader: msg.sender,
             dateAdded: block.timestamp,
-            barcode: barcode
+            barcode: barcode,
+            uploader: msg.sender,
+            productLowMargin: _productLowMargin
         });
 
         emit ProductAdded(_productID, _productName, _productPrice, _quantity, msg.sender, block.timestamp);
     }
 
-    function updateProduct(
-        uint256 _productID,
-        string calldata _productName,
-        uint256 _productPrice,
-        string calldata _barcode
-    ) external onlyAdmin {
+    function updateProductName(uint256 _productID, string calldata _productName) external onlyAdmin {
         if (bytes(_productName).length == 0) revert EmptyProductName();
-        if (_productPrice <= 0) revert InvalidPrice();
 
-        string memory barcode = bytes(_barcode).length > 0 ? _barcode : "";
-
-        LibDiamond.StoreState storage state = LibDiamond.getStoreState();
-        LibDiamond.Product storage product = state.products[_productID];
+        LibDiamond.Product storage product = LibDiamond.getStoreState().products[_productID];
         if (product.uploader == address(0)) revert LibDiamond.ProductDoesNotExist(_productID);
 
         product.productName = _productName;
-        product.productPrice = _productPrice;
-        product.barcode = barcode;
 
-        emit ProductUpdated(_productID, _productName, _productPrice, _barcode);
+        emit ProductNameUpdated(_productID, _productName);
+    }
+
+    function updateProductPrice(uint256 _productID, uint256 _productPrice) external onlyAdmin {
+        require(_productPrice > 0, InvalidPrice());
+
+        LibDiamond.Product storage product = LibDiamond.getStoreState().products[_productID];
+        if (product.uploader == address(0)) revert LibDiamond.ProductDoesNotExist(_productID);
+
+        product.productPrice = _productPrice;
+
+        emit ProductPriceUpdated(_productID, _productPrice);
+    }
+
+    function updateProductLowMargin(uint256 _productID, uint16 _productLowMargin) external onlyAdmin {
+        require(_productLowMargin > 0, InvalidProductLowMargin());
+
+        LibDiamond.Product storage product = LibDiamond.getStoreState().products[_productID];
+        if (product.uploader == address(0)) revert LibDiamond.ProductDoesNotExist(_productID);
+
+        product.productLowMargin = _productLowMargin;
+
+        emit ProductLowMarginUpdated(_productID, _productLowMargin);
     }
 
     function restockProduct(LibDiamond.SaleItem[] calldata _products) external onlyAdmin {
@@ -122,7 +137,7 @@ contract InventoryManagementFacet {
         }
     }
 
-    function getAllProducts() external view returns (LibDiamond.Product[] memory) {
+    function getAllProducts() external view onlyAdminAndSalesRep returns (LibDiamond.Product[] memory) {
         LibDiamond.StoreState storage state = LibDiamond.getStoreState();
         uint256[] memory productIds = state.productsIDArray;
         uint256 noOfProducts = productIds.length;

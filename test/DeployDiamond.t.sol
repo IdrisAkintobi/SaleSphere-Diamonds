@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.27;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
 
 import { IDiamondCut } from "../src/interfaces/IDiamondCut.sol";
 import { DiamondCutFacet } from "../src/facets/DiamondCutFacet.sol";
@@ -22,17 +22,14 @@ contract DiamondDeployer is DiamondUtils, IDiamondCut, Test {
     SalesFacet salesF;
     StaffManagementFacet staffMngtF;
 
-    address owner;
-    uint16 maxAdmins = 10;
-    uint24 maxQuantity = 1e6;
-    uint16 productLowMargin = 24;
+    address storeOwner = address(this);
+    uint16 constant maxAdmins = 10;
+    uint24 constant maxQuantity = 1e6;
 
     function setUp() public {
-        merkleRoot = getMerkleTreeRoot();
-
         //deploy facets
         dCutFacet = new DiamondCutFacet();
-        diamond = new Diamond(address(this), address(dCutFacet), maxAdmins, maxQuantity, productLowMargin);
+        diamond = new Diamond(storeOwner, address(dCutFacet), maxAdmins, maxQuantity);
         dLoupe = new DiamondLoupeFacet();
         ownerF = new OwnershipFacet();
         inventoryF = new InventoryManagementFacet();
@@ -41,50 +38,26 @@ contract DiamondDeployer is DiamondUtils, IDiamondCut, Test {
 
         //upgrade diamond with facets
         //build cut struct
-        FacetCut[] memory cut = new FacetCut[](4);
-
-        cut[0] = (
-            FacetCut({
-                facetAddress: address(dLoupe),
-                action: FacetCutAction.Add,
-                functionSelectors: generateSelectors("DiamondLoupeFacet")
-            })
-        );
-
-        cut[1] = (
-            FacetCut({
-                facetAddress: address(ownerF),
-                action: FacetCutAction.Add,
-                functionSelectors: generateSelectors("OwnershipFacet")
-            })
-        );
-
-        cut[2] = (
-            IDiamondCut.FacetCut({
-                facetAddress: address(inventoryF),
-                action: IDiamondCut.FacetCutAction.Add,
-                functionSelectors: generateSelectors("InventoryManagementFacet")
-            })
-        );
-
-        cut[3] = (
-            IDiamondCut.FacetCut({
-                facetAddress: address(salesF),
-                action: IDiamondCut.FacetCutAction.Add,
-                functionSelectors: generateSelectors("SalesFacet")
-            })
-        );
-
-        cut[4] = (
-            IDiamondCut.FacetCut({
-                facetAddress: address(staffMngtF),
-                action: IDiamondCut.FacetCutAction.Add,
-                functionSelectors: generateSelectors("StaffManagementFacet")
-            })
-        );
+        FacetCut[] memory cut = new FacetCut[](5);
+        cut[0] = _createFacetCut(address(dLoupe), "DiamondLoupeFacet");
+        cut[1] = _createFacetCut(address(ownerF), "OwnershipFacet");
+        cut[2] = _createFacetCut(address(staffMngtF), "StaffManagementFacet");
+        cut[3] = _createFacetCut(address(inventoryF), "InventoryManagementFacet");
+        cut[4] = _createFacetCut(address(salesF), "SalesFacet");
 
         //upgrade diamond
         IDiamondCut(address(diamond)).diamondCut(cut, address(0x0), "");
+    }
+
+    function _createFacetCut(address _facetAddress, string memory _facetName)
+        private
+        returns (IDiamondCut.FacetCut memory)
+    {
+        return IDiamondCut.FacetCut({
+            facetAddress: _facetAddress,
+            action: IDiamondCut.FacetCutAction.Add,
+            functionSelectors: generateSelectors(_facetName)
+        });
     }
 
     function test_DeployDiamond() public view {
